@@ -16,9 +16,6 @@ import System.Environment
 -- <operator> -> <expr>
 -- <operand> -> <expr>
 
-
--- data Form = Definition Identifier Expr
-
 data Datum = Boolean Bool
             | Number Integer
             | Identifier String
@@ -35,6 +32,8 @@ testParser input = case res of
     Left err -> "No match: " ++ show err
     Right (String val) -> "Found string: " ++ val
     Right (List val) -> "Found list: " ++ show val
+    Right (Identifier val) -> "Found identifier: " ++ val
+    Right (Number val) -> "Found number: " ++ show val
     _ -> "Found value but not implemented output yet"
     where res = parse parseExpr "test" input
 
@@ -42,25 +41,27 @@ parseExpr :: Parser Datum
 parseExpr = parseString
         <|> parseList
         <|> parseIdentifier
+        <|> parseNumber
         <?> "lisp expression"
 
-parseString :: Parser Datum
 parseString = do
             char '"'
             string <- many (noneOf "\"")
             char '"'
             return $ String string
 
-parseList :: Parser Datum
 parseList = do
             char '('
-            list <- parseExpr `sepBy` (char ' ') 
+            list <- parseExpr `sepBy` (char ' ')
             char ')'
             return $ List list
 
 symbol = oneOf "!@#$%^&*-_+/:<=>?~"
-parseIdentifier :: Parser Datum
+
 parseIdentifier = do
             head <- symbol <|> letter
             tail <- many (symbol <|> letter <|> digit)
             return $ Identifier $ head:tail
+
+-- Only integers, for now
+parseNumber = fmap (Number . read) $ many digit
