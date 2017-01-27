@@ -16,33 +16,47 @@ import System.Environment
 -- <operator> -> <expr>
 -- <operand> -> <expr>
 
-data Datum = Boolean Bool
+
+data ASTNode = Boolean Bool
             | Number Integer
             | Identifier String
-            | List [Datum]
+            | List [ASTNode]
             | String String
             deriving Show
 
 main :: IO ()
 main = do
-        x:xs <- getArgs
-        putStrLn $ testParser x
+     x:xs <- getArgs
+     putStrLn $ show $ readExpr x
 
-testParser input = case res of
-    Left err -> "No match: " ++ show err
-    Right (String val) -> "Found string: " ++ val
-    Right (List val) -> "Found list: " ++ show val
-    Right (Identifier val) -> "Found identifier: " ++ val
-    Right (Number val) -> "Found number: " ++ show val
-    _ -> "Found value but not implemented output yet"
-    where res = parse parseExpr "test" input
+-- Helpers
+readExpr input = case parse parseASTNode "test" input of
+                 Left err -> String $ "No match"
+                 Right val -> val
 
-parseExpr :: Parser Datum
-parseExpr = parseString
-        <|> parseList
-        <|> parseIdentifier
-        <|> parseNumber
-        <?> "lisp expression"
+readExpr' (Left err) = String $ "No match"
+readExpr' (Right val) = val
+
+eval :: ASTNode -> ASTNode
+eval (List [Identifier "quote", val]) = val
+eval val                              = val
+
+symbol = oneOf "!@#$%^&*-_+/:<=>?~"
+
+-- Parsers
+parseASTNode :: Parser ASTNode
+parseASTNode = parseString
+             <|> parseList
+             <|> parseIdentifier
+             <|> parseNumber
+             <|> parseQuotation
+             <?> "lisp expression"
+
+-- '<datum> or (quote <datum>), second solved by parseList
+parseQuotation = do
+               char '\''
+               datum <- parseASTNode
+               return $ List [Identifier "quote", datum]
 
 parseString = do
             char '"'
@@ -51,17 +65,19 @@ parseString = do
             return $ String string
 
 parseList = do
-            char '('
-            list <- parseExpr `sepBy` (char ' ')
-            char ')'
-            return $ List list
-
-symbol = oneOf "!@#$%^&*-_+/:<=>?~"
+          char '('
+          list <- parseASTNode `sepBy` (char ' ')
+          char ')'
+          return $ List list
 
 parseIdentifier = do
-            head <- symbol <|> letter
-            tail <- many (symbol <|> letter <|> digit)
-            return $ Identifier $ head:tail
+                head <- symbol <|> letter
+                tail <- many (symbol <|> letter <|> digit)
+                let identifier = head:tail 
+                return $ case identifier of
+                         "#t" -> Boolean True 
+                         "#f" -> Boolean False
+                         _    -> Identifier identifier
 
 -- Only integers, for now
-parseNumber = fmap (Number . read) $ many digit
+parseNumber = fmap (Number . read) $ many1 digit
